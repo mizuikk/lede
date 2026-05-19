@@ -50,13 +50,14 @@ fi
 
 update_passwall=1
 install_passwall=0
+install_passwall_set=0
 force_feeds=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --update-passwall) update_passwall=1; shift ;;
     --no-update-passwall) update_passwall=0; shift ;;
-    --install-passwall) install_passwall=1; shift ;;
+    --install-passwall) install_passwall=1; install_passwall_set=1; shift ;;
     --force-feeds) force_feeds=1; shift ;;
     --defconfig-only) update_passwall=0; install_passwall=0; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -67,6 +68,15 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# Auto-enable feeds install on fresh checkouts where package/feeds links are
+# missing. Without this, Kconfig may not "see" feed packages and profile
+# options can be ignored.
+if [[ "$install_passwall_set" -eq 0 ]]; then
+  if [[ ! -d package/feeds/passwall_packages || ! -d package/feeds/passwall_luci ]]; then
+    install_passwall=1
+  fi
+fi
 
 if ! grep -q '^CONFIG_TARGET_' "$profile_path"; then
   echo "Error: profile does not contain any CONFIG_TARGET_ entries: $profile_path" >&2
@@ -91,6 +101,9 @@ if [[ "$update_passwall" -eq 1 ]]; then
   fi
 else
   echo "[1/4] Skipping Passwall feed update"
+  if [[ "$install_passwall" -eq 1 ]]; then
+    echo "Note: --install-passwall requires updating feeds; ignoring install step."
+  fi
 fi
 
 if [[ ! -x ./scripts/config/conf ]]; then
