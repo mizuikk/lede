@@ -1,5 +1,8 @@
 # Scripts
 
+This directory contains helper scripts intended to make feed syncing and
+configuration/profile-based builds more repeatable.
+
 ## `update-passwall.sh`
 
 Updates the Passwall feeds and optionally installs all packages from them.
@@ -37,5 +40,73 @@ Update only (skip install):
 
 ```sh
 scripts/update-passwall.sh --no-install
+```
+
+## `sync-feeds.sh`
+
+Synchronizes feeds using `./scripts/feeds update` and `./scripts/feeds install`.
+
+### What it does
+
+- By default: `./scripts/feeds update -a` and `./scripts/feeds install -a`
+- When feed names are provided: updates those feeds and installs packages from those feeds
+
+### Usage
+
+```sh
+scripts/sync-feeds.sh [--force] [--update-only|--install-only] [feedname...]
+```
+
+### Examples
+
+Update and install all feeds:
+
+```sh
+scripts/sync-feeds.sh
+```
+
+Update only:
+
+```sh
+scripts/sync-feeds.sh --update-only
+```
+
+Sync a subset of feeds:
+
+```sh
+scripts/sync-feeds.sh packages luci
+```
+
+## `apply-profile.sh`
+
+Applies a `diffconfig` profile from `profiles/` to generate a full `.config`,
+then runs `make defconfig`.
+
+### What it does
+
+- Optionally syncs all feeds first (`--sync-all-feeds`)
+- Optionally updates Passwall feeds first (default)
+- Generates `.config` from `profiles/<name>.diffconfig`
+- Runs `make defconfig`
+- Prints Passwall feed revisions for traceability
+
+### Usage
+
+```sh
+scripts/apply-profile.sh <profile-name> [options]
+```
+
+### Examples
+
+Apply profile and update Passwall feeds first:
+
+```sh
+scripts/apply-profile.sh x86_64-passwall-docker
+```
+
+Apply profile after syncing all feeds (update + install):
+
+```sh
+scripts/apply-profile.sh x86_64-passwall-docker --sync-all-feeds
 ```
 

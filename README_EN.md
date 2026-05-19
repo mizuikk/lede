@@ -82,6 +82,42 @@ make download -j8
 make V=s -j$(nproc)
 ```
 
+## Use Cases (Fork Additions)
+
+### 1) Track Passwall upstream + build with a pinned profile
+
+Use this when you want to keep your build configuration reusable while still
+pulling the latest Passwall feed updates.
+
+```bash
+scripts/apply-profile.sh x86_64-passwall-docker
+make -j"$(nproc)"
+```
+
+### 2) Sync all feeds (update + install) + build with profile
+
+Use this when you changed multiple feeds in `feeds.conf.default` or want to
+upgrade all feed packages before building.
+
+```bash
+scripts/apply-profile.sh x86_64-passwall-docker --sync-all-feeds
+make -j"$(nproc)"
+```
+
+### 3) Sync feeds only (no profile apply)
+
+```bash
+scripts/sync-feeds.sh
+```
+
+### 4) Refresh the profile from current `.config`
+
+After changing options via `make menuconfig`:
+
+```bash
+./scripts/diffconfig.sh > profiles/x86_64-passwall-docker.diffconfig
+```
+
 If reconfiguration is need:
 
 ```bash

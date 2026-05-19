@@ -100,6 +100,40 @@ make download -j8
 make V=s -j$(nproc)
 ```
 
+## 使用场景（本 fork 增强）
+
+### 1) 追踪 Passwall 上游 + 使用 profile 固化配置
+
+适用于：希望每次编译都同步 Passwall 上游最新，同时保持配置稳定可复用。
+
+```bash
+scripts/apply-profile.sh x86_64-passwall-docker
+make -j"$(nproc)"
+```
+
+### 2) 同步所有 feeds（全量更新所有包）+ 使用 profile 编译
+
+适用于：你改动了 `feeds.conf.default` 的多个 feed，或者希望全量升级所有 feed 的包后再编译。
+
+```bash
+scripts/apply-profile.sh x86_64-passwall-docker --sync-all-feeds
+make -j"$(nproc)"
+```
+
+### 3) 仅同步 feeds（不应用 profile）
+
+```bash
+scripts/sync-feeds.sh
+```
+
+### 4) profile 更新（把当前 `.config` 固化回 profile）
+
+当你通过 `make menuconfig` 调整完选项后：
+
+```bash
+./scripts/diffconfig.sh > profiles/x86_64-passwall-docker.diffconfig
+```
+
 如果需要重新配置：
 
 ```bash

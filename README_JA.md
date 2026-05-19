@@ -72,6 +72,41 @@ make download -j8
 make V=s -j$(nproc)
 ```
 
+## 使用シナリオ（本 fork 追加）
+
+### 1) Passwall を上流追従 + profile で設定を固定してビルド
+
+Passwall の feeds を最新に更新しつつ、ビルド設定を再利用したい場合に使用します。
+
+```bash
+scripts/apply-profile.sh x86_64-passwall-docker
+make -j"$(nproc)"
+```
+
+### 2) すべての feeds を同期（update + install）+ profile でビルド
+
+`feeds.conf.default` の複数 feeds を変更した場合や、全 feeds のパッケージを更新してから
+ビルドしたい場合に使用します。
+
+```bash
+scripts/apply-profile.sh x86_64-passwall-docker --sync-all-feeds
+make -j"$(nproc)"
+```
+
+### 3) feeds の同期のみ（profile は適用しない）
+
+```bash
+scripts/sync-feeds.sh
+```
+
+### 4) 現在の `.config` から profile を更新
+
+`make menuconfig` でオプション変更後：
+
+```bash
+./scripts/diffconfig.sh > profiles/x86_64-passwall-docker.diffconfig
+```
+
 再設定が必要な場合:
 
 ```bash
