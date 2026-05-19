@@ -12,6 +12,7 @@ Options:
   --update-passwall     Update Passwall feeds before applying (default)
   --no-update-passwall  Skip updating feeds
   --install-passwall    Run feeds install for Passwall feeds after update
+  --sync-all-feeds      Run scripts/sync-feeds.sh (update+install all feeds) before applying
   --force-feeds         Force-update feeds (passes --force to update-passwall.sh)
   --defconfig-only      Apply profile + make defconfig, no feed updates
   -h, --help            Show this help
@@ -21,6 +22,7 @@ Examples:
   scripts/apply-profile.sh x86_64-passwall-docker --no-update-passwall
   scripts/apply-profile.sh x86_64-passwall-docker --force-feeds
   scripts/apply-profile.sh x86_64-passwall-docker --install-passwall
+  scripts/apply-profile.sh x86_64-passwall-docker --sync-all-feeds
 EOF
 }
 
@@ -51,6 +53,7 @@ fi
 update_passwall=1
 install_passwall=0
 install_passwall_set=0
+sync_all_feeds=0
 force_feeds=0
 
 while [[ $# -gt 0 ]]; do
@@ -58,6 +61,7 @@ while [[ $# -gt 0 ]]; do
     --update-passwall) update_passwall=1; shift ;;
     --no-update-passwall) update_passwall=0; shift ;;
     --install-passwall) install_passwall=1; install_passwall_set=1; shift ;;
+    --sync-all-feeds) sync_all_feeds=1; shift ;;
     --force-feeds) force_feeds=1; shift ;;
     --defconfig-only) update_passwall=0; install_passwall=0; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -84,7 +88,16 @@ if ! grep -q '^CONFIG_TARGET_' "$profile_path"; then
   exit 1
 fi
 
-if [[ "$update_passwall" -eq 1 ]]; then
+if [[ "$sync_all_feeds" -eq 1 ]]; then
+  if [[ ! -x scripts/sync-feeds.sh ]]; then
+    echo "Error: scripts/sync-feeds.sh not found or not executable" >&2
+    exit 1
+  fi
+  echo "[0/4] Syncing all feeds (update+install)"
+  scripts/sync-feeds.sh
+fi
+
+if [[ "$update_passwall" -eq 1 && "$sync_all_feeds" -eq 0 ]]; then
   if [[ ! -x scripts/update-passwall.sh ]]; then
     echo "Error: scripts/update-passwall.sh not found or not executable" >&2
     exit 1
