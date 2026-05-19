@@ -11,6 +11,7 @@ generate a full .config, then runs "make defconfig" to close dependencies.
 Options:
   --update-passwall     Update Passwall feeds before applying (default)
   --no-update-passwall  Skip updating feeds
+  --install-passwall    Run feeds install for Passwall feeds after update
   --force-feeds         Force-update feeds (passes --force to update-passwall.sh)
   --defconfig-only      Apply profile + make defconfig, no feed updates
   -h, --help            Show this help
@@ -19,6 +20,7 @@ Examples:
   scripts/apply-profile.sh x86_64-passwall-docker
   scripts/apply-profile.sh x86_64-passwall-docker --no-update-passwall
   scripts/apply-profile.sh x86_64-passwall-docker --force-feeds
+  scripts/apply-profile.sh x86_64-passwall-docker --install-passwall
 EOF
 }
 
@@ -47,14 +49,16 @@ if [[ ! -f "$profile_path" ]]; then
 fi
 
 update_passwall=1
+install_passwall=0
 force_feeds=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --update-passwall) update_passwall=1; shift ;;
     --no-update-passwall) update_passwall=0; shift ;;
+    --install-passwall) install_passwall=1; shift ;;
     --force-feeds) force_feeds=1; shift ;;
-    --defconfig-only) update_passwall=0; shift ;;
+    --defconfig-only) update_passwall=0; install_passwall=0; shift ;;
     -h|--help) usage; exit 0 ;;
     *)
       echo "Unknown option: $1" >&2
@@ -76,10 +80,14 @@ if [[ "$update_passwall" -eq 1 ]]; then
     exit 1
   fi
   echo "[1/4] Updating Passwall feeds"
+  update_args=("--no-install")
+  if [[ "$install_passwall" -eq 1 ]]; then
+    update_args=()
+  fi
   if [[ "$force_feeds" -eq 1 ]]; then
-    scripts/update-passwall.sh --force --no-install
+    scripts/update-passwall.sh --force "${update_args[@]}"
   else
-    scripts/update-passwall.sh --no-install
+    scripts/update-passwall.sh "${update_args[@]}"
   fi
 else
   echo "[1/4] Skipping Passwall feed update"
