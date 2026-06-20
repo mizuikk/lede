@@ -38,7 +38,7 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           docker image prune -f
-          sudo -E rm -rf /usr/share/dotnet /etc/mysql /etc/php /etc/apt/sources.list.d /usr/local/lib/android
+          sudo -E rm -rf /usr/share/dotnet /etc/mysql /etc/php /usr/local/lib/android
           sudo -E apt-mark hold grub-efi-amd64-signed
           sudo -E apt update
           mapfile -t purge_packages < <(
