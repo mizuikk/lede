@@ -1,0 +1,84 @@
+name: Sync-Upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: 17 20 * * *
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: sync-upstream-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sync_upstream:
+    name: Sync Upstream
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    env:
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      UPSTREAM_REPO: coolsnowwolf/lede
+      BUILD_WORKFLOW_FILE: openwrt-ci.yml
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Merge upstream when updated
+        id: sync
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git remote remove upstream 2>/dev/null || true
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+
+          git fetch origin "${DEFAULT_BRANCH}"
+          git fetch upstream "${DEFAULT_BRANCH}"
+
+          git checkout "${DEFAULT_BRANCH}"
+          git reset --hard "origin/${DEFAULT_BRANCH}"
+
+          if git merge-base --is-ancestor "upstream/${DEFAULT_BRANCH}" "origin/${DEFAULT_BRANCH}"; then
+            echo "has_updates=false" >> "${GITHUB_OUTPUT}"
+            echo "No upstream updates to merge."
+            exit 0
+          fi
+
+          before_sha="$(git rev-parse HEAD)"
+
+          git merge --no-edit "upstream/${DEFAULT_BRANCH}"
+
+          after_sha="$(git rev-parse HEAD)"
+          if [[ "${before_sha}" == "${after_sha}" ]]; then
+            echo "has_updates=false" >> "${GITHUB_OUTPUT}"
+            echo "No merge result to push."
+            exit 0
+          fi
+
+          git push origin "HEAD:${DEFAULT_BRANCH}"
+
+          echo "has_updates=true" >> "${GITHUB_OUTPUT}"
+          echo "merged_sha=${after_sha}" >> "${GITHUB_OUTPUT}"
+          echo "merged_short_sha=$(git rev-parse --short "${after_sha}")" >> "${GITHUB_OUTPUT}"
+
+      - name: Trigger build workflow
+        if: steps.sync.outputs.has_updates == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/${BUILD_WORKFLOW_FILE}/dispatches" \
+            -f ref="${DEFAULT_BRANCH}" \
+            -f inputs[build_reason]="upstream-sync" \
+            -f inputs[source_sha]="${{ steps.sync.outputs.merged_sha }}"

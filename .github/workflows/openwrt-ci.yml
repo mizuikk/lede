@@ -9,8 +9,15 @@ name: OpenWrt-CI
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: 17 20 * * *
+    inputs:
+      build_reason:
+        description: Build reason
+        required: false
+        default: manual
+      source_sha:
+        description: Commit SHA to build
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -21,6 +28,8 @@ concurrency:
 
 env:
   PROFILE_NAME: x86_64-passwall-docker
+  HISTORY_RELEASE_PREFIX: build
+  HISTORY_RETENTION_DAYS: "30"
   RELEASE_TAG: latest
   RELEASE_NAME: Latest x86_64 Passwall Docker Build
 
@@ -29,6 +38,7 @@ jobs:
   build_openwrt:
 
     name: Build OpenWrt Firmware
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
 
     runs-on: ubuntu-latest
 
@@ -58,6 +68,9 @@ jobs:
 
       - name: Checkout OpenWrt
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.source_sha != '' && inputs.source_sha || github.ref }}
 
       - name: Update feeds
         run: |
@@ -87,11 +100,15 @@ jobs:
         run: |
           set -euo pipefail
 
+          build_reason="${{ inputs.build_reason != '' && inputs.build_reason || 'manual' }}"
           build_stamp="$(date -u +'%Y%m%d-%H%M%S')"
           build_date="$(date -u +'%Y-%m-%d %H:%M:%SZ')"
+          short_sha="$(git rev-parse --short HEAD)"
           release_dir="${GITHUB_WORKSPACE}/release-assets"
           metadata_dir="${GITHUB_WORKSPACE}/release-metadata"
           notes_file="${GITHUB_WORKSPACE}/release-notes.md"
+          history_tag="${HISTORY_RELEASE_PREFIX}-${build_stamp}-${short_sha}"
+          history_name="Build ${build_stamp} (${short_sha})"
 
           rm -rf "${release_dir}" "${metadata_dir}"
           mkdir -p "${release_dir}" "${metadata_dir}"
@@ -133,7 +150,9 @@ jobs:
           Run Attempt: ${GITHUB_RUN_ATTEMPT}
           Branch: ${GITHUB_REF_NAME}
           Commit: ${GITHUB_SHA}
+          Short Commit: ${short_sha}
           Profile: ${PROFILE_NAME}
+          Build Reason: ${build_reason}
           Built At (UTC): ${build_date}
           EOF
 
@@ -148,15 +167,42 @@ jobs:
           - Repository: \`${GITHUB_REPOSITORY}\`
           - Branch: \`${GITHUB_REF_NAME}\`
           - Commit: \`${GITHUB_SHA}\`
+          - Short Commit: \`${short_sha}\`
+          - Build Reason: \`${build_reason}\`
           - Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
           - Built at (UTC): \`${build_date}\`
           EOF
 
           {
             echo "build_stamp=${build_stamp}"
+            echo "history_tag=${history_tag}"
+            echo "history_name=${history_name}"
             echo "release_dir=${release_dir}"
             echo "notes_file=${notes_file}"
           } >> "${GITHUB_OUTPUT}"
+
+      - name: Publish history release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          release_dir="${{ steps.prepare_release.outputs.release_dir }}"
+          notes_file="${{ steps.prepare_release.outputs.notes_file }}"
+          history_tag="${{ steps.prepare_release.outputs.history_tag }}"
+          history_name="${{ steps.prepare_release.outputs.history_name }}"
+
+          mapfile -t assets < <(find "${release_dir}" -maxdepth 1 -type f | sort)
+          if [[ "${#assets[@]}" -eq 0 ]]; then
+            echo "No release assets prepared" >&2
+            exit 1
+          fi
+
+          gh release create "${history_tag}" "${assets[@]}" \
+            --title "${history_name}" \
+            --notes-file "${notes_file}" \
+            --target "${GITHUB_SHA}" \
+            --latest=false
 
       - name: Publish latest release
         if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
@@ -205,3 +251,29 @@ jobs:
               --verify-tag \
               --latest
           fi
+
+      - name: Delete history releases older than retention window
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          cutoff_epoch="$(date -u -d "${HISTORY_RETENTION_DAYS} days ago" +%s)"
+
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq '.[] | [.tag_name, .created_at] | @tsv' |
+          while IFS=$'\t' read -r tag_name created_at; do
+            if [[ "${tag_name}" == "${RELEASE_TAG}" ]]; then
+              continue
+            fi
+
+            if [[ "${tag_name}" != "${HISTORY_RELEASE_PREFIX}-"* ]]; then
+              continue
+            fi
+
+            created_epoch="$(date -u -d "${created_at}" +%s)"
+            if (( created_epoch >= cutoff_epoch )); then
+              continue
+            fi
+
+            gh release delete "${tag_name}" --cleanup-tag --yes
+          done
