@@ -8,11 +8,21 @@
 name: OpenWrt-CI
 
 on:
+  workflow_dispatch:
   schedule:
-    - cron: 0 20 * * *
+    - cron: 17 20 * * *
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: openwrt-ci-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PROFILE_NAME: x86_64-passwall-docker
+  RELEASE_TAG: latest
+  RELEASE_NAME: Latest x86_64 Passwall Docker Build
 
 jobs:
 
@@ -20,7 +30,7 @@ jobs:
 
     name: Build OpenWrt Firmware
 
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Space cleanup and Initialization environment
@@ -62,7 +72,7 @@ jobs:
           ./scripts/sync-feeds.sh
 
       - name: Generate configuration file
-        run: make defconfig
+        run: ./scripts/apply-profile.sh "${PROFILE_NAME}" --defconfig-only
 
       - name: Download packages
         run: make download -j16
@@ -79,28 +89,126 @@ jobs:
           du -h --max-depth=1 ./build_dir
           du -h --max-depth=1 ./bin
 
-      - name: Prepare artifact
+      - name: Prepare release assets
+        id: prepare_release
         run: |
-          mkdir -p ./artifact/package
-          mkdir -p ./artifact/buildinfo
-          rm -rf $(find ./bin/targets/ -type d -name "packages")
-          cp -rf $(find ./bin/packages/ -type f -name "*.ipk") ./artifact/package/
-          cp -rf $(find ./bin/targets/ -type f -name "*.buildinfo" -o -name "*.manifest") ./artifact/buildinfo/
+          set -euo pipefail
 
-      - name: Upload buildinfo
-        uses: actions/upload-artifact@v4
-        with:
-          name: OpenWrt_buildinfo
-          path: ./artifact/buildinfo/
+          build_stamp="$(date -u +'%Y%m%d-%H%M%S')"
+          build_date="$(date -u +'%Y-%m-%d %H:%M:%SZ')"
+          release_dir="${GITHUB_WORKSPACE}/release-assets"
+          metadata_dir="${GITHUB_WORKSPACE}/release-metadata"
+          notes_file="${GITHUB_WORKSPACE}/release-notes.md"
 
-      - name: Upload package
-        uses: actions/upload-artifact@v4
-        with:
-          name: OpenWrt_package
-          path: ./artifact/package/
+          rm -rf "${release_dir}" "${metadata_dir}"
+          mkdir -p "${release_dir}" "${metadata_dir}"
 
-      - name: Upload firmware
-        uses: actions/upload-artifact@v4
-        with:
-          name: OpenWrt_firmware
-          path: ./bin/targets/
+          if [[ ! -d ./bin/targets ]]; then
+            echo "bin/targets not found" >&2
+            exit 1
+          fi
+
+          if [[ ! -d ./bin/packages ]]; then
+            echo "bin/packages not found" >&2
+            exit 1
+          fi
+
+          firmware_archive="openwrt-${PROFILE_NAME}-firmware-${build_stamp}.tar.gz"
+          packages_archive="openwrt-${PROFILE_NAME}-packages-${build_stamp}.tar.gz"
+          buildinfo_archive="openwrt-${PROFILE_NAME}-buildinfo-${build_stamp}.tar.gz"
+          metadata_file="openwrt-${PROFILE_NAME}-metadata-${build_stamp}.txt"
+          checksum_file="openwrt-${PROFILE_NAME}-sha256sums-${build_stamp}.txt"
+
+          tar --exclude='targets/*/*/packages' -C ./bin -czf "${release_dir}/${firmware_archive}" targets
+          tar -C ./bin -czf "${release_dir}/${packages_archive}" packages
+
+          while IFS= read -r -d '' file; do
+            install -D "${file}" "${metadata_dir}/${file#./bin/}"
+          done < <(find ./bin/targets -type f \( -name '*.buildinfo' -o -name '*.manifest' -o -name 'sha256sums' \) -print0)
+
+          if [[ -z "$(find "${metadata_dir}" -type f -print -quit)" ]]; then
+            echo "No build metadata files were produced" >&2
+            exit 1
+          fi
+
+          tar -C "${metadata_dir}" -czf "${release_dir}/${buildinfo_archive}" .
+
+          cat > "${release_dir}/${metadata_file}" <<EOF
+          Repository: ${GITHUB_REPOSITORY}
+          Workflow: ${GITHUB_WORKFLOW}
+          Run ID: ${GITHUB_RUN_ID}
+          Run Attempt: ${GITHUB_RUN_ATTEMPT}
+          Branch: ${GITHUB_REF_NAME}
+          Commit: ${GITHUB_SHA}
+          Profile: ${PROFILE_NAME}
+          Built At (UTC): ${build_date}
+          EOF
+
+          (
+            cd "${release_dir}"
+            sha256sum ./* > "${checksum_file}"
+          )
+
+          cat > "${notes_file}" <<EOF
+          Automated latest build for \`${PROFILE_NAME}\`.
+
+          - Repository: \`${GITHUB_REPOSITORY}\`
+          - Branch: \`${GITHUB_REF_NAME}\`
+          - Commit: \`${GITHUB_SHA}\`
+          - Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          - Built at (UTC): \`${build_date}\`
+          EOF
+
+          {
+            echo "build_stamp=${build_stamp}"
+            echo "release_dir=${release_dir}"
+            echo "notes_file=${notes_file}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Publish latest release
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          release_dir="${{ steps.prepare_release.outputs.release_dir }}"
+          notes_file="${{ steps.prepare_release.outputs.notes_file }}"
+
+          mapfile -t assets < <(find "${release_dir}" -maxdepth 1 -type f | sort)
+          if [[ "${#assets[@]}" -eq 0 ]]; then
+            echo "No release assets prepared" >&2
+            exit 1
+          fi
+
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" "${assets[@]}"
+
+            declare -A keep_assets=()
+            for asset_path in "${assets[@]}"; do
+              keep_assets["$(basename "${asset_path}")"]=1
+            done
+
+            while IFS= read -r asset_name; do
+              if [[ -z "${keep_assets[${asset_name}]:-}" ]]; then
+                gh release delete-asset "${RELEASE_TAG}" "${asset_name}" --yes
+              fi
+            done < <(gh release view "${RELEASE_TAG}" --json assets --jq '.assets[].name')
+
+            git tag -f "${RELEASE_TAG}" "${GITHUB_SHA}"
+            git push origin "refs/tags/${RELEASE_TAG}" --force
+
+            gh release edit "${RELEASE_TAG}" \
+              --title "${RELEASE_NAME}" \
+              --notes-file "${notes_file}" \
+              --latest
+          else
+            git tag -f "${RELEASE_TAG}" "${GITHUB_SHA}"
+            git push origin "refs/tags/${RELEASE_TAG}" --force
+
+            gh release create "${RELEASE_TAG}" "${assets[@]}" \
+              --title "${RELEASE_NAME}" \
+              --notes-file "${notes_file}" \
+              --verify-tag \
+              --latest
+          fi
