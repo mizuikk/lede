@@ -71,8 +71,7 @@ I18N: [English](README_EN.md) | [简体中文](README.md) | [日本語](README_J
    ```bash
    git clone https://github.com/coolsnowwolf/lede
    cd lede
-   ./scripts/feeds update -a
-   ./scripts/feeds install -a
+   scripts/sync-feeds.sh
    make menuconfig
    ```
 
@@ -93,12 +92,15 @@ I18N: [English](README_EN.md) | [简体中文](README.md) | [日本語](README_J
 ```bash
 cd lede
 git pull
-./scripts/feeds update -a
-./scripts/feeds install -a
+scripts/sync-feeds.sh
 make defconfig
 make download -j8
 make V=s -j$(nproc)
 ```
+
+说明：本 fork 会在 `scripts/sync-feeds.sh` 中自动同步官方
+`openwrt/packages` `openwrt-25.12` 分支的 `lang/perl` 到
+`feeds/packages/lang/perl`，避免旧版 Perl 在新工具链下反复手工修复。
 
 ## 使用场景（本 fork 增强）
 

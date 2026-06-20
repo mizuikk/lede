@@ -51,8 +51,7 @@ Buy Link ：
    ```bash
    git clone https://github.com/coolsnowwolf/lede
    cd lede
-   ./scripts/feeds update -a
-   ./scripts/feeds install -a
+   scripts/sync-feeds.sh
    make menuconfig
    ```
 
@@ -75,12 +74,16 @@ Rebuild:
 ```bash
 cd lede
 git pull
-./scripts/feeds update -a
-./scripts/feeds install -a
+scripts/sync-feeds.sh
 make defconfig
 make download -j8
 make V=s -j$(nproc)
 ```
+
+Note: this fork uses `scripts/sync-feeds.sh` to automatically synchronize the
+official `openwrt/packages` `openwrt-25.12` `lang/perl` tree into
+`feeds/packages/lang/perl`, so Perl no longer depends on manual local
+toolchain compatibility fixes.
 
 ## Use Cases (Fork Additions)
 

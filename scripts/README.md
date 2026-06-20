@@ -3,6 +3,11 @@
 This directory contains helper scripts intended to make feed syncing and
 configuration/profile-based builds more repeatable.
 
+The repository also auto-synchronizes `feeds/packages/lang/perl` from the
+official `openwrt/packages` `openwrt-25.12` branch. Feed sync flows refresh
+that tree automatically so Perl does not depend on manual local compatibility
+patches.
+
 ## `update-passwall.sh`
 
 Updates the Passwall feeds and optionally installs all packages from them.
@@ -50,11 +55,13 @@ Synchronizes feeds using `./scripts/feeds update` and `./scripts/feeds install`.
 
 - By default: `./scripts/feeds update -a` and `./scripts/feeds install -a`
 - When feed names are provided: updates those feeds and installs packages from those feeds
+- Refreshes `feeds/packages/lang/perl` from official OpenWrt before installing
+- Rebuilds the `packages` feed index after the Perl tree is refreshed
 
 ### Usage
 
 ```sh
-scripts/sync-feeds.sh [--force] [--update-only|--install-only] [feedname...]
+scripts/sync-feeds.sh [--force] [--update-only|--install-only] [--no-sync-official-perl] [feedname...]
 ```
 
 ### Examples
@@ -75,6 +82,23 @@ Sync a subset of feeds:
 
 ```sh
 scripts/sync-feeds.sh packages luci
+```
+
+## `sync-official-perl.sh`
+
+Synchronizes `feeds/packages/lang/perl` from the official `openwrt/packages`
+repository branch `openwrt-25.12`.
+
+### What it does
+
+- Maintains a cache under `.cache/openwrt-packages`
+- Copies the upstream `lang/perl` directory into `feeds/packages/lang/perl`
+- Prints the exact upstream revision used for traceability
+
+### Usage
+
+```sh
+scripts/sync-official-perl.sh
 ```
 
 ## `apply-profile.sh`
@@ -109,4 +133,3 @@ Apply profile after syncing all feeds (update + install):
 ```sh
 scripts/apply-profile.sh x86_64-passwall-docker --sync-all-feeds
 ```
-

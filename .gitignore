@@ -30,3 +30,5 @@ git-src
 .cproject
 .ccache
 .vscode*
+/.cache/
+/customfeeds/official_perl/
