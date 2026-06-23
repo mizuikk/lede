@@ -15,13 +15,13 @@ case "$FIRMWARE" in
 	glinet,gl-ax1800|\
 	glinet,gl-axt1800|\
 	linksys,mr7350|\
+	philips,ly1800|\
 	qihoo,360v6|\
 	xiaomi,rm1800)
 		caldata_extract "0:art" 0x1000 0x10000
 		;;
 	jdcloud,re-cs-02|\
 	jdcloud,re-ss-01|\
-	philips,ly1800|\
 	redmi,ax5-jdcloud)
 		caldata_extract_mmc "0:ART" 0x1000 0x10000
 		;;
