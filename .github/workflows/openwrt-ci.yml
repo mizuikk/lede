@@ -72,13 +72,8 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.source_sha != '' && inputs.source_sha || github.ref }}
 
-      - name: Update feeds
-        run: |
-          sed -i 's/#src-git helloworld/src-git helloworld/g' ./feeds.conf.default
-          ./scripts/sync-feeds.sh
-
-      - name: Generate configuration file
-        run: ./scripts/apply-profile.sh "${PROFILE_NAME}" --defconfig-only
+      - name: Update feeds and generate configuration file
+        run: ./scripts/apply-profile.sh "${PROFILE_NAME}" --sync-all-feeds
 
       - name: Download packages
         run: make download -j16
