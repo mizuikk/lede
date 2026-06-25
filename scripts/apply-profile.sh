@@ -119,15 +119,11 @@ else
   fi
 fi
 
-if [[ ! -x ./scripts/config/conf ]]; then
-  echo "[2/4] Building Kconfig conf tool"
-  make ./scripts/config/conf >/dev/null
-else
-  echo "[2/4] Kconfig conf tool present"
-fi
+echo "[2/4] Seeding .config from profile"
+cp "$profile_path" .config
 
-echo "[3/4] Generating .config from profile seed"
-./scripts/config/conf --defconfig="$profile_path" -w .config Config.in >/dev/null
+echo "[3/4] Generating Kconfig metadata (prepare-tmpinfo)"
+make prepare-tmpinfo >/dev/null
 
 echo "[4/4] Running make defconfig"
 make defconfig >/dev/null
