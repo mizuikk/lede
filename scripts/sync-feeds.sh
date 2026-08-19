@@ -87,14 +87,14 @@ if [[ "$sync_perl" -eq 1 && "$do_update" -eq 1 && "${#feeds[@]}" -gt 0 ]]; then
 fi
 
 if [[ "$do_update" -eq 1 ]]; then
-  echo "[1/3] Updating feeds"
+  echo "[1/4] Updating feeds"
   if [[ "$force" -eq 1 ]]; then
     ./scripts/feeds update -f "${update_args[@]}"
   else
     ./scripts/feeds update "${update_args[@]}"
   fi
 else
-  echo "[1/3] Skipping feeds update (--install-only)"
+  echo "[1/4] Skipping feeds update (--install-only)"
 fi
 
 if [[ "$sync_perl" -eq 1 ]]; then
@@ -102,15 +102,26 @@ if [[ "$sync_perl" -eq 1 ]]; then
     echo "Error: feeds/packages is missing. Run scripts/sync-feeds.sh packages or ./scripts/feeds update packages first." >&2
     exit 1
   fi
-  echo "[2/3] Synchronizing official perl"
+  echo "[2/4] Synchronizing official perl"
   ./scripts/sync-official-perl.sh
 else
-  echo "[2/3] Skipping official perl synchronization (--no-sync-official-perl)"
+  echo "[2/4] Skipping official perl synchronization (--no-sync-official-perl)"
+fi
+
+if [[ -d "$TOPDIR/feeds/packages" ]]; then
+  if [[ ! -x ./scripts/stage-dockerd-build-patch.sh ]]; then
+    echo "Error: scripts/stage-dockerd-build-patch.sh not found or not executable (TOPDIR=$TOPDIR)" >&2
+    exit 1
+  fi
+  echo "[3/4] Staging dockerd build compatibility patch"
+  ./scripts/stage-dockerd-build-patch.sh
+else
+  echo "[3/4] Skipping dockerd patch (packages feed is unavailable)"
 fi
 
 if [[ "$do_install" -eq 1 ]]; then
-  echo "[3/3] Installing feed packages"
+  echo "[4/4] Installing feed packages"
   ./scripts/feeds install "${install_args[@]}"
 else
-  echo "[3/3] Skipping feeds install (--update-only)"
+  echo "[4/4] Skipping feeds install (--update-only)"
 fi

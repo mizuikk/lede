@@ -1,0 +1,5 @@
+--- a/hack/make/binary-daemon
++++ b/hack/make/binary-daemon
+@@ -34 +34 @@
+-	copy_binaries "$DEST"
++	# OpenWrt packages nested runtime helpers separately.

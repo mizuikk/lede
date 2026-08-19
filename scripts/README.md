@@ -8,6 +8,11 @@ official `openwrt/packages` `openwrt-25.12` branch. Feed sync flows refresh
 that tree automatically so Perl does not depend on manual local compatibility
 patches.
 
+Feed sync also stages a local `dockerd` source patch. It prevents Moby's
+release helper from copying incomplete host-side runtime binaries when an x86
+target is built on an x86 GitHub Actions runner; OpenWrt packages those runtime
+components separately.
+
 ## `update-passwall.sh`
 
 Updates the Passwall feeds and optionally installs all packages from them.
